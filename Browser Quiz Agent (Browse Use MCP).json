@@ -1,0 +1,201 @@
+{
+  "name": "Browser Quiz Agent (Browse Use MCP)",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Quiz Agent",
+        "formDescription": "Paste the quiz URL",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "url",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Form Trigger",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a8289d6e-3f98-4091-bfae-167215d98a1b",
+      "webhookId": "bd3e7cf1-42e4-4014-a2ac-759341b53f26"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Complete the quiz at this URL: {{ $json.url }}",
+        "options": {
+          "systemMessage": "You control a browser through tools. Goal: complete the quiz at the given URL.\n\nLoop:\n1. browser_navigate to the URL (first step only).\n2. browser_snapshot to read the current question and options.\n3. Reason about the correct answer from the question text. If unsure, pick the most likely option and note low confidence.\n4. Click/select the option, then click Next/Submit.\n5. Use browser_wait_for if the page loads dynamically, then browser_snapshot again to verify the page changed. If not, retry once, then report the blocker.\nComplete the quiz in the selected tab.\n\nRepeat for every question:\n1. take_snapshot.\n2. Click the correct option.\n3. take_snapshot again (new buttons may appear after selecting).\n4. Click the button labelled Next, Submit, Finish, Check, or See results.\n5. take_snapshot again to confirm the page changed.\n\nRules:\n- UIDs change after every snapshot. Never reuse an old uid.\n- Do not stop after selecting an option. A question is finished only\n  when you have clicked the forward or submit button.\n- On the last question, click Submit/Finish, then take a snapshot and\n  report the final score text.\n- If no button is visible, scroll down or press the Tab key and Enter, then re-snapshot.\n- Stop only when a results or score screen is visible.\nStop when a results page appears. Final report: questions answered, your choice for each with confidence, final score if shown.\n\nNever enter credentials. If you hit a login wall or CAPTCHA, stop and report it.",
+          "maxIterations": 40
+        }
+      },
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [
+        304,
+        0
+      ],
+      "id": "9efec490-6497-4153-acce-ec3fe3d072b9"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $execution.id }}",
+        "contextWindowLength": 20
+      },
+      "name": "Window Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        352,
+        272
+      ],
+      "id": "0fec0a5b-8662-4edd-9c7d-413ea88d5121"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "result",
+              "name": "report",
+              "value": "={{ $json.output }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Format Output",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        672,
+        0
+      ],
+      "id": "fc57a4e8-4798-4bef-ab92-4302bde2692c"
+    },
+    {
+      "parameters": {
+        "endpointUrl": "http://host.docker.internal:8931/sse",
+        "serverTransport": "sse",
+        "include": "selected",
+        "includeTools": [
+          "list_pages",
+          "new_page",
+          "press_key",
+          "select_page",
+          "navigate_page",
+          "take_snapshot",
+          "click",
+          "fill_form"
+        ],
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.mcpClientTool",
+      "typeVersion": 1.4,
+      "position": [
+        464,
+        400
+      ],
+      "id": "489fe4fa-e98e-48f1-8707-bccc528d7048",
+      "name": "MCP Client"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.2,
+      "position": [
+        176,
+        208
+      ],
+      "id": "53c80cd9-614e-45b2-89f1-79d7f3063a50",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "rfjFzAHVS5jw2vDV",
+          "name": "Google Gemini(PaLM) Api account 2"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Form Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Format Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Window Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MCP Client": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "5ebbb0f3-8d58-4131-b5d2-5afb1373c3b3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "bded55b0c8aae409dea82358155b41e5b06c3cd7c5e8a269f8a8bd90fd45a53b"
+  },
+  "nodeGroups": [],
+  "id": "VSVGqqramzohrMKw",
+  "tags": []
+}
